@@ -1,6 +1,6 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pandas
 openpyxl
-uvicorn[standard]
 python-multipart
+pydantic>=2.0.0
