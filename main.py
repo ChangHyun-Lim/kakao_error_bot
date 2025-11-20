@@ -175,3 +175,11 @@ def simple_text(text: str):
             ]
         }
     }
+
+
+# -----------------------------
+# 8) 로컬 실행용 (Railway에는 영향 없음)
+# -----------------------------
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)
