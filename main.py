@@ -3,33 +3,54 @@ from pydantic import BaseModel
 import pandas as pd
 import re
 import os
+import threading
+import time
+import requests
 
-# -----------------------------
-# 0) FastAPI 인스턴스 생성
-# -----------------------------
 app = FastAPI()
 
-@app.get("/")
-def root():
-    return {"status": "ok"}
+# -----------------------------
+# 0) Health check
+# -----------------------------
+@app.get("/health")
+def health():
+    return {"status": "alive"}
+
+# -----------------------------
+# 🚀 1) Keep-Alive (자동 자기 호출)
+# -----------------------------
+def keep_alive():
+    """
+    Railway 무료 플랜이 서버를 Sleep하지 않도록
+    10초마다 자기 자신을 /health 로 호출하는 함수.
+    """
+    while True:
+        try:
+            url = f"http://127.0.0.1:{PORT}/health"
+            requests.get(url, timeout=3)
+        except Exception:
+            pass
+        time.sleep(10)  # 10초마다 ping
 
 
 # -----------------------------
-# 1) Excel 최초 1회만 로드
+# 2) Excel 로딩 (초기 1회)
 # -----------------------------
 EXCEL_PATH = "wtr_Error_Code.xlsx"
+df = None
 
-try:
+def load_excel_first():
+    global df
+    print("[INFO] Excel 최초 로드 시작!")
     df = pd.read_excel(EXCEL_PATH)
     df["code_num"] = pd.to_numeric(df["code"], errors="coerce")
-    print("[INFO] Excel 최초 로드 완료.")
-except Exception as e:
-    df = None
-    print("[ERROR] Excel 로드 실패:", e)
+    print("[INFO] Excel 최초 로드 완료!")
+
+load_excel_first()
 
 
 # -----------------------------
-# 2) 카카오 요청 모델
+# 3) Kakao Request Model
 # -----------------------------
 class KakaoRequest(BaseModel):
     userRequest: dict
@@ -37,7 +58,7 @@ class KakaoRequest(BaseModel):
 
 
 # -----------------------------
-# 3) 코드 매핑 함수
+# 4) 코드 매핑
 # -----------------------------
 def map_code(o: int) -> int:
     if 1000 <= o <= 1100:
@@ -68,14 +89,8 @@ def map_code(o: int) -> int:
         return o
 
 
-# -----------------------------
-# 4) 후보코드 생성
-# -----------------------------
 def generate_candidates(input_code: int):
-    cands = set()
-
-    cands.add(input_code)
-    cands.add(map_code(input_code))
+    cands = {input_code, map_code(input_code)}
 
     for v in df["code_num"].dropna().astype(int).tolist():
         if map_code(v) == input_code:
@@ -85,29 +100,28 @@ def generate_candidates(input_code: int):
 
 
 # -----------------------------
-# 5) GET 테스트 API
+# 5) TEST API
 # -----------------------------
 @app.get("/test")
-def test_error(code: int):
+def test(code: int):
     if df is None:
         return {"error": "Excel 데이터가 로드되지 않았습니다."}
 
-    input_code = code
-    candidates = generate_candidates(input_code)
-
+    candidates = generate_candidates(code)
     subset = df[df["code_num"].astype('Int64').isin(candidates)]
 
     if len(subset) == 0:
         return {
-            "input_code": input_code,
+            "input_code": code,
             "candidates": candidates,
             "found": False,
             "message": "해당 코드 정보 없음"
         }
 
     row = subset.iloc[0]
+
     return {
-        "input_code": input_code,
+        "input_code": code,
         "candidates": candidates,
         "found": True,
         "code": str(row["code"]),
@@ -121,18 +135,16 @@ def test_error(code: int):
 # -----------------------------
 @app.post("/kakao/skill")
 def kakao_skill(request: KakaoRequest):
-
     if df is None:
-        return simple_text("❗ Excel 파일 로드 실패. 서버 관리자에게 문의하세요.")
+        return simple_text("❗ Excel 데이터가 로드되지 않았습니다.")
 
     utter = request.userRequest.get("utterance", "")
-
     match = re.findall(r"-?\d+", utter)
+
     if not match:
         return simple_text("❗ 숫자 코드가 포함되지 않았습니다.\n예) /w 1001")
 
     input_code = int(match[0])
-
     candidates = generate_candidates(input_code)
     subset = df[df["code_num"].astype('Int64').isin(candidates)]
 
@@ -140,13 +152,13 @@ def kakao_skill(request: KakaoRequest):
         return simple_text(f"❗ 코드 {input_code} 관련 정보를 찾을 수 없습니다.")
 
     row = subset.iloc[0]
+    msg = f"[Error {row['code']}]\n{row['err_name']}\n\n{row['desc']}"
 
-    message = f"[Error {row['code']}]\n{row['err_name']}\n\n{row['desc']}"
-    return simple_text(message)
+    return simple_text(msg)
 
 
 # -----------------------------
-# 7) 카카오 simpleText 형식
+# 7) simpleText
 # -----------------------------
 def simple_text(text: str):
     return {
@@ -160,7 +172,7 @@ def simple_text(text: str):
 
 
 # -----------------------------
-# 🔥 8) favicon 502 방지
+# 8) favicon (502 방지)
 # -----------------------------
 @app.get("/favicon.ico")
 def favicon():
@@ -168,12 +180,14 @@ def favicon():
 
 
 # -----------------------------
-# 로컬 실행용
+# 9) 서버 실행 (Keep-Alive 스레드 포함)
 # -----------------------------
 if __name__ == "__main__":
     import uvicorn
 
+    PORT = int(os.getenv("PORT", 8080))
 
-@app.get("/health")
-def health():
-    return {"status": "healthy"}
+    # 🔥 Keep-alive thread 시작
+    threading.Thread(target=keep_alive, daemon=True).start()
+
+    uvicorn.run("main:app", host="0.0.0.0", port=PORT)
