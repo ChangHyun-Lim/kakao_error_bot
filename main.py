@@ -5,7 +5,7 @@ import re
 import os
 
 # -----------------------------
-# FastAPI 인스턴스
+# 0) FastAPI 인스턴스 생성
 # -----------------------------
 app = FastAPI()
 
@@ -15,7 +15,7 @@ def root():
 
 
 # -----------------------------
-# Excel 파일 최초 1회 로드
+# 1) Excel 최초 1회만 로드
 # -----------------------------
 EXCEL_PATH = "wtr_Error_Code.xlsx"
 
@@ -24,12 +24,12 @@ try:
     df["code_num"] = pd.to_numeric(df["code"], errors="coerce")
     print("[INFO] Excel 최초 로드 완료.")
 except Exception as e:
-    print(f"[ERROR] Excel 로드 실패: {e}")
     df = None
+    print("[ERROR] Excel 로드 실패:", e)
 
 
 # -----------------------------
-# 카카오 요청 모델
+# 2) 카카오 요청 모델
 # -----------------------------
 class KakaoRequest(BaseModel):
     userRequest: dict
@@ -37,7 +37,7 @@ class KakaoRequest(BaseModel):
 
 
 # -----------------------------
-# 코드 매핑 함수
+# 3) 코드 매핑 함수
 # -----------------------------
 def map_code(o: int) -> int:
     if 1000 <= o <= 1100:
@@ -69,13 +69,11 @@ def map_code(o: int) -> int:
 
 
 # -----------------------------
-# 후보코드 생성
+# 4) 후보코드 생성
 # -----------------------------
 def generate_candidates(input_code: int):
-    if df is None:
-        return []
-
     cands = set()
+
     cands.add(input_code)
     cands.add(map_code(input_code))
 
@@ -87,11 +85,10 @@ def generate_candidates(input_code: int):
 
 
 # -----------------------------
-# GET 테스트 API
+# 5) GET 테스트 API
 # -----------------------------
 @app.get("/test")
 def test_error(code: int):
-
     if df is None:
         return {"error": "Excel 데이터가 로드되지 않았습니다."}
 
@@ -120,13 +117,13 @@ def test_error(code: int):
 
 
 # -----------------------------
-# 카카오 스킬 API
+# 6) 카카오 스킬 API
 # -----------------------------
 @app.post("/kakao/skill")
 def kakao_skill(request: KakaoRequest):
 
     if df is None:
-        return simple_text("❗ Excel 데이터가 로드되지 않았습니다.")
+        return simple_text("❗ Excel 파일 로드 실패. 서버 관리자에게 문의하세요.")
 
     utter = request.userRequest.get("utterance", "")
 
@@ -135,8 +132,8 @@ def kakao_skill(request: KakaoRequest):
         return simple_text("❗ 숫자 코드가 포함되지 않았습니다.\n예) /w 1001")
 
     input_code = int(match[0])
-    candidates = generate_candidates(input_code)
 
+    candidates = generate_candidates(input_code)
     subset = df[df["code_num"].astype('Int64').isin(candidates)]
 
     if len(subset) == 0:
@@ -149,7 +146,7 @@ def kakao_skill(request: KakaoRequest):
 
 
 # -----------------------------
-# 카카오 simpleText
+# 7) 카카오 simpleText 형식
 # -----------------------------
 def simple_text(text: str):
     return {
@@ -163,8 +160,15 @@ def simple_text(text: str):
 
 
 # -----------------------------
-# favicon (502 방지)
+# 🔥 8) favicon 502 방지
 # -----------------------------
 @app.get("/favicon.ico")
 def favicon():
     return {}
+
+
+# -----------------------------
+# 로컬 실행용
+# -----------------------------
+if __name__ == "__main__":
+    import uvicorn
