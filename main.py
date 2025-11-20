@@ -172,3 +172,8 @@ def favicon():
 # -----------------------------
 if __name__ == "__main__":
     import uvicorn
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
