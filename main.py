@@ -9,6 +9,10 @@ import os
 # -----------------------------
 app = FastAPI()
 
+@app.get("/")
+def root():
+    return {"status": "ok"}
+    
 
 # -----------------------------
 # 1) Excel 자동 업데이트 기능
@@ -101,6 +105,9 @@ def generate_candidates(input_code: int):
 def test_error(code: int):
     load_excel()
 
+    if df is None:
+        return {"error": "Excel 데이터가 로드되지 않았습니다."}
+
     input_code = code
     candidates = generate_candidates(input_code)
 
@@ -131,6 +138,9 @@ def test_error(code: int):
 @app.post("/kakao/skill")
 def kakao_skill(request: KakaoRequest):
     load_excel()
+
+    if df is None:
+        return {"error": "Excel 데이터가 로드되지 않았습니다."}
 
     utter = request.userRequest.get("utterance", "")
 
@@ -184,6 +194,4 @@ def favicon():
 if __name__ == "__main__":
     import uvicorn
     import os
-
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
