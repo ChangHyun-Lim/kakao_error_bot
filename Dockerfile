@@ -11,4 +11,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY wtr_Error_Code.xlsx .
 COPY main.py .
 
-CMD ["python", "main.py"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
