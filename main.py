@@ -4,12 +4,10 @@ import pandas as pd
 import re
 import os
 
-
 # -----------------------------
-# 0) FastAPI 인스턴스 생성
+# FastAPI 인스턴스
 # -----------------------------
 app = FastAPI()
-
 
 @app.get("/")
 def root():
@@ -17,36 +15,21 @@ def root():
 
 
 # -----------------------------
-# 1) Excel 자동 업데이트 기능
+# Excel 파일 최초 1회 로드
 # -----------------------------
 EXCEL_PATH = "wtr_Error_Code.xlsx"
-last_modified = None
-df = None   # 전역 변수로 사용
 
-
-def load_excel():
-    global df, last_modified
-
-    try:
-        mtime = os.path.getmtime(EXCEL_PATH)
-    except FileNotFoundError:
-        print(f"[ERROR] Excel 파일을 찾을 수 없습니다: {EXCEL_PATH}")
-        df = None
-        return
-
-    if last_modified is None or mtime != last_modified:
-        print("[INFO] Excel 변경 감지됨. 재로드 중...")
-        df = pd.read_excel(EXCEL_PATH)
-        df["code_num"] = pd.to_numeric(df["code"], errors="coerce")
-        last_modified = mtime
-
-
-# 서버 시작 시 최초 1회 로드
-load_excel()
+try:
+    df = pd.read_excel(EXCEL_PATH)
+    df["code_num"] = pd.to_numeric(df["code"], errors="coerce")
+    print("[INFO] Excel 최초 로드 완료.")
+except Exception as e:
+    print(f"[ERROR] Excel 로드 실패: {e}")
+    df = None
 
 
 # -----------------------------
-# 2) 카카오 요청 모델
+# 카카오 요청 모델
 # -----------------------------
 class KakaoRequest(BaseModel):
     userRequest: dict
@@ -54,7 +37,7 @@ class KakaoRequest(BaseModel):
 
 
 # -----------------------------
-# 3) 코드 매핑 함수
+# 코드 매핑 함수
 # -----------------------------
 def map_code(o: int) -> int:
     if 1000 <= o <= 1100:
@@ -86,16 +69,15 @@ def map_code(o: int) -> int:
 
 
 # -----------------------------
-# 4) 후보코드 생성
+# 후보코드 생성
 # -----------------------------
 def generate_candidates(input_code: int):
-    cands = set()
+    if df is None:
+        return []
 
+    cands = set()
     cands.add(input_code)
     cands.add(map_code(input_code))
-
-    if df is None:
-        return list(cands)
 
     for v in df["code_num"].dropna().astype(int).tolist():
         if map_code(v) == input_code:
@@ -105,11 +87,10 @@ def generate_candidates(input_code: int):
 
 
 # -----------------------------
-# 5) GET 테스트 API
+# GET 테스트 API
 # -----------------------------
 @app.get("/test")
 def test_error(code: int):
-    load_excel()
 
     if df is None:
         return {"error": "Excel 데이터가 로드되지 않았습니다."}
@@ -117,7 +98,7 @@ def test_error(code: int):
     input_code = code
     candidates = generate_candidates(input_code)
 
-    subset = df[df["code_num"].astype("Int64").isin(candidates)]
+    subset = df[df["code_num"].astype('Int64').isin(candidates)]
 
     if len(subset) == 0:
         return {
@@ -139,63 +120,51 @@ def test_error(code: int):
 
 
 # -----------------------------
-# 6) 카카오 스킬 API
+# 카카오 스킬 API
 # -----------------------------
 @app.post("/kakao/skill")
 def kakao_skill(request: KakaoRequest):
-    load_excel()
 
     if df is None:
         return simple_text("❗ Excel 데이터가 로드되지 않았습니다.")
 
     utter = request.userRequest.get("utterance", "")
-    match = re.findall(r"-?\d+", utter)
 
+    match = re.findall(r"-?\d+", utter)
     if not match:
         return simple_text("❗ 숫자 코드가 포함되지 않았습니다.\n예) /w 1001")
 
     input_code = int(match[0])
-
     candidates = generate_candidates(input_code)
-    subset = df[df["code_num"].astype("Int64").isin(candidates)]
+
+    subset = df[df["code_num"].astype('Int64').isin(candidates)]
 
     if len(subset) == 0:
         return simple_text(f"❗ 코드 {input_code} 관련 정보를 찾을 수 없습니다.")
 
     row = subset.iloc[0]
+
     message = f"[Error {row['code']}]\n{row['err_name']}\n\n{row['desc']}"
     return simple_text(message)
 
 
 # -----------------------------
-# 7) 카카오 simpleText 형식
+# 카카오 simpleText
 # -----------------------------
 def simple_text(text: str):
     return {
         "version": "2.0",
         "template": {
             "outputs": [
-                {
-                    "simpleText": {
-                        "text": text
-                    }
-                }
+                {"simpleText": {"text": text}}
             ]
         }
     }
 
 
 # -----------------------------
-# 🔥 8) 브라우저용 favicon 요청 처리 (502 방지)
+# favicon (502 방지)
 # -----------------------------
 @app.get("/favicon.ico")
 def favicon():
-    return {}  # 항상 200 OK 반환
-
-
-# -----------------------------
-# 로컬 실행용
-# -----------------------------
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+    return {}
