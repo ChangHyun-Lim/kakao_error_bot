@@ -4,15 +4,17 @@ import pandas as pd
 import re
 import os
 
+
 # -----------------------------
 # 0) FastAPI 인스턴스 생성
 # -----------------------------
 app = FastAPI()
 
+
 @app.get("/")
 def root():
     return {"status": "ok"}
-    
+
 
 # -----------------------------
 # 1) Excel 자동 업데이트 기능
@@ -29,6 +31,7 @@ def load_excel():
         mtime = os.path.getmtime(EXCEL_PATH)
     except FileNotFoundError:
         print(f"[ERROR] Excel 파일을 찾을 수 없습니다: {EXCEL_PATH}")
+        df = None
         return
 
     if last_modified is None or mtime != last_modified:
@@ -91,6 +94,9 @@ def generate_candidates(input_code: int):
     cands.add(input_code)
     cands.add(map_code(input_code))
 
+    if df is None:
+        return list(cands)
+
     for v in df["code_num"].dropna().astype(int).tolist():
         if map_code(v) == input_code:
             cands.add(v)
@@ -111,7 +117,7 @@ def test_error(code: int):
     input_code = code
     candidates = generate_candidates(input_code)
 
-    subset = df[df["code_num"].astype('Int64').isin(candidates)]
+    subset = df[df["code_num"].astype("Int64").isin(candidates)]
 
     if len(subset) == 0:
         return {
@@ -140,24 +146,23 @@ def kakao_skill(request: KakaoRequest):
     load_excel()
 
     if df is None:
-        return {"error": "Excel 데이터가 로드되지 않았습니다."}
+        return simple_text("❗ Excel 데이터가 로드되지 않았습니다.")
 
     utter = request.userRequest.get("utterance", "")
-
     match = re.findall(r"-?\d+", utter)
+
     if not match:
         return simple_text("❗ 숫자 코드가 포함되지 않았습니다.\n예) /w 1001")
 
     input_code = int(match[0])
 
     candidates = generate_candidates(input_code)
-    subset = df[df["code_num"].astype('Int64').isin(candidates)]
+    subset = df[df["code_num"].astype("Int64").isin(candidates)]
 
     if len(subset) == 0:
         return simple_text(f"❗ 코드 {input_code} 관련 정보를 찾을 수 없습니다.")
 
     row = subset.iloc[0]
-
     message = f"[Error {row['code']}]\n{row['err_name']}\n\n{row['desc']}"
     return simple_text(message)
 
@@ -185,7 +190,7 @@ def simple_text(text: str):
 # -----------------------------
 @app.get("/favicon.ico")
 def favicon():
-    return {}   # 항상 200 OK 반환
+    return {}  # 항상 200 OK 반환
 
 
 # -----------------------------
@@ -193,5 +198,4 @@ def favicon():
 # -----------------------------
 if __name__ == "__main__":
     import uvicorn
-    import os
     uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
