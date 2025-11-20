@@ -1,10 +1,156 @@
-FROM python:3.11-slim
+from fastapi import FastAPI
+from pydantic import BaseModel
+import pandas as pd
+import re
+import os
+import time
+import threading
+import httpx
 
-WORKDIR /app
+app = FastAPI()
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+@app.get("/")
+def root():
+    return {"status": "ok"}
 
-COPY . .
+@app.get("/health")
+def health():
+    return {"status": "alive"}
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Excel 최초 로드
+EXCEL_PATH = "wtr_Error_Code.xlsx"
+df = None
+
+def load_excel_first():
+    global df
+    print("[INFO] Excel 최초 로드 시작!")
+    try:
+        df = pd.read_excel(EXCEL_PATH)
+        df["code_num"] = pd.to_numeric(df["code"], errors="coerce")
+        print("[INFO] Excel 최초 로드 완료!")
+    except Exception as e:
+        print("[ERROR] 엑셀 로드 실패:", e)
+
+load_excel_first()
+
+class KakaoRequest(BaseModel):
+    userRequest: dict
+    action: dict
+
+def map_code(o: int) -> int:
+    if 1000 <= o <= 1100:
+        return o - 700
+    elif 2000 < o < 2100:
+        return o - 1600
+    elif -230 < o <= -200:
+        return (-o) + 300
+    elif -330 < o <= -300:
+        return (-o) + 230
+    elif -530 < o <= -500:
+        return (-o) + 60
+    elif -820 < o <= -700:
+        return (-o) - 110
+    elif -1060 < o <= -1000:
+        return (-o) - 290
+    elif -1570 < o <= -1500:
+        return (-o) - 730
+    elif -1620 < o <= -1600:
+        return (-o) - 760
+    elif -1750 < o <= -1700:
+        return (-o) - 840
+    elif -3020 < o <= -3000:
+        return (-o) - 2090
+    elif -3150 < o <= -3100:
+        return (-o) - 2170
+    else:
+        return o
+
+def generate_candidates(input_code: int):
+    global df
+    cands = {input_code, map_code(input_code)}
+    for v in df["code_num"].dropna().astype(int).tolist():
+        if map_code(v) == input_code:
+            cands.add(v)
+    return list(cands)
+
+@app.get("/test")
+def test_error(code: int):
+    global df
+    if df is None:
+        return {"error": "Excel 데이터가 로드되지 않았습니다."}
+
+    input_code = code
+    candidates = generate_candidates(input_code)
+    subset = df[df["code_num"].astype('Int64').isin(candidates)]
+
+    if len(subset) == 0:
+        return {
+            "input_code": input_code,
+            "candidates": candidates,
+            "found": False,
+            "message": "해당 코드 정보 없음"
+        }
+
+    row = subset.iloc[0]
+    return {
+        "input_code": input_code,
+        "candidates": candidates,
+        "found": True,
+        "code": str(row["code"]),
+        "err_name": str(row["err_name"]),
+        "desc": str(row["desc"])
+    }
+
+@app.post("/kakao/skill")
+def kakao_skill(request: KakaoRequest):
+    global df
+    if df is None:
+        return {"error": "Excel 데이터가 로드되지 않았습니다."}
+
+    utter = request.userRequest.get("utterance", "")
+    match = re.findall(r"-?\d+", utter)
+
+    if not match:
+        return simple_text("❗ 숫자 코드가 포함되지 않았습니다.\n예) /w 1001")
+
+    input_code = int(match[0])
+    candidates = generate_candidates(input_code)
+    subset = df[df["code_num"].astype('Int64').isin(candidates)]
+
+    if len(subset) == 0:
+        return simple_text(f"❗ 코드 {input_code} 관련 정보를 찾을 수 없습니다.")
+
+    row = subset.iloc[0]
+    message = f"[Error {row['code']}]\n{row['err_name']}\n\n{row['desc']}"
+    return simple_text(message)
+
+def simple_text(text: str):
+    return {
+        "version": "2.0",
+        "template": {
+            "outputs": [
+                {"simpleText": {"text": text}}
+            ]
+        }
+    }
+
+KEEP_ALIVE_INTERVAL = 20
+
+def keep_alive():
+    while True:
+        try:
+            domain = os.getenv("RAILWAY_PUBLIC_DOMAIN") or os.getenv("RAILWAY_STATIC_URL")
+            if domain:
+                url = f"https://{domain}/health"
+                r = httpx.get(url, timeout=5)
+                print(f"[KEEP-ALIVE] Ping → {r.status_code}")
+        except Exception as e:
+            print(f"[KEEP-ALIVE ERROR] {e}")
+        time.sleep(KEEP_ALIVE_INTERVAL)
+
+threading.Thread(target=keep_alive, daemon=True).start()
+
+if __name__ == "__main__":
+    import uvicorn
+    import os
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
