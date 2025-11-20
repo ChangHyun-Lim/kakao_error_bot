@@ -12,14 +12,14 @@ app = FastAPI()
 # -----------------------------
 # 1) Excel 자동 업데이트 기능
 # -----------------------------
-EXCEL_PATH = "에러코드.xlsx"
+EXCEL_PATH = "wtr_Error_Code.xlsx"
 last_modified = None
 df = None   # 전역 변수로 사용
 
 
 def load_excel():
     """
-    에러코드.xlsx 파일의 수정 시간이 바뀌면 자동으로 다시 로드하는 함수
+    wtr_Error_Code.xlsx 파일의 수정 시간이 바뀌면 자동으로 다시 로드하는 함수
     """
     global df, last_modified
 
