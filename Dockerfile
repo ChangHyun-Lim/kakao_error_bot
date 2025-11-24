@@ -14,7 +14,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 엑셀 + 소스 복사
-# 지금은 WTR 파일만 존재한다고 가정 (Aligner/Loadport는 나중에 추가)
 COPY wtr_Error_Code.xlsx .
 COPY aligner_Error_Code.xlsx .
 COPY loadport_Error_Code.xlsx .
