@@ -13,18 +13,18 @@ app = FastAPI()
 # Excel 파일 경로 (3종류)
 # ----------------------------------------
 EXCEL_FILES = {
-    "w": "wtr_Error_Code.xlsx",        # 로봇(WTR)
+    "w": "wtr_Error_Code.xlsx",
     "a": "aligner_Error_Code.xlsx",
     "l": "loadport_Error_Code.xlsx",
 }
 
-# Excel 데이터 저장용 (prefix → DataFrame)
+# Excel 데이터 저장
 excel_data = {}
 
 
-# ----------------------------------------
-# map_code (로봇 전용)
-# ----------------------------------------
+# ========================================
+# 🔥 WTR 숫자코드 변환 (정방향)
+# ========================================
 def map_code(o: int) -> int:
     if 1000 <= o <= 1100:
         return o - 700
@@ -54,9 +54,24 @@ def map_code(o: int) -> int:
         return o
 
 
-# ----------------------------------------
+# ========================================
+# 🔥 역변환: map_code(v) == 입력값 → v 검색
+# ========================================
+def reverse_map_code(input_num: int, df):
+    """
+    df 안에서 map_code(v) == input_num 인 v 값을 찾아줌
+    (865 입력 → -1705 반환)
+    """
+    matches = []
+    for v in df["code_num"].dropna().astype(int).tolist():
+        if map_code(v) == input_num:
+            matches.append(v)
+    return matches
+
+
+# ========================================
 # Excel 최초 1회 로드
-# ----------------------------------------
+# ========================================
 def load_all_excels():
     print("[INFO] Excel 최초 로드 시작!")
 
@@ -73,18 +88,18 @@ def load_all_excels():
     print("[INFO] Excel 최초 로드 완료!")
 
 
-# ----------------------------------------
-# Startup 시 자동 실행
-# ----------------------------------------
+# ========================================
+# 서버 시작 시 Excel 로드 + keep-alive 시작
+# ========================================
 @app.on_event("startup")
 def startup_event():
     load_all_excels()
     start_keep_alive()
 
 
-# ----------------------------------------
-# keep-alive (Railway sleep 방지)
-# ----------------------------------------
+# ========================================
+# keepalive 기능
+# ========================================
 def start_keep_alive():
     def ping():
         time.sleep(5)
@@ -111,62 +126,62 @@ def root():
     return {"status": "ok"}
 
 
-# ----------------------------------------
-# 카카오 스킬 요청 모델
-# ----------------------------------------
+# ========================================
+# 카카오 스킬 Request 모델
+# ========================================
 class KakaoRequest(BaseModel):
     userRequest: dict
     action: dict
 
 
-# ----------------------------------------
-# 에러코드 검색 함수
-# ----------------------------------------
+# ========================================
+# 🔥 에러코드 검색 함수
+# ========================================
 def search_error(prefix: str, input_code: str):
-    """prefix(a/w/l) + 입력된 코드로 검색"""
 
     if prefix not in excel_data:
         return None, "❗ prefix 오류 (/w, /a, /l 중 선택)"
 
     df = excel_data[prefix]
 
-    # 문자 검색 (E02, L05 등)
+    # -------------------------------------------------------
+    # 문자코드(E02 등)는 그대로 검색
+    # -------------------------------------------------------
     code_upper = input_code.upper()
     subset = df[df["code_str"] == code_upper]
 
-    # 숫자 처리
+    # -------------------------------------------------------
+    # 숫자로 변환 시도
+    # -------------------------------------------------------
     try:
         input_num = int(input_code)
 
-        # 로봇(/w) 만 map_code 변환 적용
-        if prefix == "w":
-            mapped = map_code(input_num)
+        # 1) 숫자 그대로 매칭
+        subset = pd.concat([subset, df[df["code_num"] == input_num]])
 
-            # 1차: 변환된 숫자로 검색
-            subset = pd.concat([
-                subset,
-                df[df["code_num"] == mapped]
-            ])
+        # 2) 숫자 변환(map_code)
+        mapped = map_code(input_num)
+        subset = pd.concat([subset, df[df["code_num"] == mapped]])
 
-        # 2차: 원본 숫자 그대로 검색
-        subset = pd.concat([
-            subset,
-            df[df["code_num"] == input_num]
-        ])
+        # 3) 역변환 (map_code(v) == input_num)
+        if prefix == "w":  # 로봇만 역변환 적용
+            rev = reverse_map_code(input_num, df)
+            if len(rev) > 0:
+                subset = pd.concat([subset, df[df["code_num"].isin(rev)]])
 
     except:
         pass
 
-    # 최종 결과
     if len(subset) == 0:
         return None, f"❗ 코드 '{input_code}' 관련 정보를 찾을 수 없습니다."
 
-    return subset.iloc[0], None
+    row = subset.iloc[0]
+    return row, None
 
 
-# ----------------------------------------
-# GET 테스트 API
-# ----------------------------------------
+# ========================================
+# 테스트용 API
+# ========================================
 @app.get("/test")
 def test(prefix: str, code: str):
     row, err = search_error(prefix, code)
@@ -181,9 +196,9 @@ def test(prefix: str, code: str):
     }
 
 
-# ----------------------------------------
+# ========================================
 # 카카오 스킬 API
-# ----------------------------------------
+# ========================================
 @app.post("/kakao/skill")
 def kakao_skill(request: KakaoRequest):
 
@@ -191,7 +206,7 @@ def kakao_skill(request: KakaoRequest):
 
     m = re.match(r"/([wal])\s+(.+)", utter, re.IGNORECASE)
     if not m:
-        return simple_text("❗ 형식 오류\n예) /w 865   /w E02   /a 001   /l L02")
+        return simple_text("❗ 형식 오류\n예) /w E02   /a 1001   /l L05")
 
     prefix = m.group(1).lower()
     code = m.group(2).strip()
@@ -204,7 +219,7 @@ def kakao_skill(request: KakaoRequest):
     return simple_text(msg)
 
 
-# ----------------------------------------
+# ========================================
 def simple_text(text: str):
     return {
         "version": "2.0",
