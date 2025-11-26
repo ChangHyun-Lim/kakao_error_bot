@@ -204,7 +204,7 @@ def kakao_skill(request: KakaoRequest):
 
     utter = request.userRequest.get("utterance", "").strip()
 
-    m = re.match(r"/([wal])\s+(.+)", utter, re.IGNORECASE)
+    m = re.match(r"/([wal])\s*(.+)", utter, re.IGNORECASE)
     if not m:
         return simple_text("❗ 형식 오류\n예) /w E02   /a 1001   /l L05")
 
