@@ -203,10 +203,9 @@ def test(prefix: str, code: str):
 def kakao_skill(request: KakaoRequest):
 
     utter = request.userRequest.get("utterance", "").strip()
-
-    m = re.match(r"/([wal])\s*(.+)", utter, re.IGNORECASE)
+    m = re.match(r"/([wal])\s+(.+)", utter, re.IGNORECASE)
     if not m:
-        return simple_text("❗ 형식 오류\n예) /w E02   /a 1001   /l L05")
+        return simple_text("❗ 형식 오류\n예) /w E02  /a 1001  /l L05")
 
     prefix = m.group(1).lower()
     code = m.group(2).strip()
@@ -215,8 +214,42 @@ def kakao_skill(request: KakaoRequest):
     if err:
         return simple_text(err)
 
-    msg = f"[{prefix.upper()} Error {row['code']}]\n{row['err_name']}\n\n{row['desc']}"
-    return simple_text(msg)
+    # 기본 텍스트
+    text = f"[{prefix.upper()} Error {row['code']}]\n{row['err_name']}\n\n{row['desc']}"
+
+    # 🔥 attach 값 있는지 확인
+    attach = str(row.get("attach","")).strip()
+    if attach and attach != "nan":
+        file_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/files/{attach}"
+        return make_button(text, "📄 매뉴얼 보기", file_url)
+
+    # 첨부 없으면 기존 형식 유지
+    return simple_text(text)
+
+
+
+def make_button(msg, label, url):
+    return {
+        "version": "2.0",
+        "template": {
+            "outputs": [
+                {"simpleText": {"text": msg}},
+                {
+                    "basicCard": {
+                        "title": "첨부 매뉴얼",
+                        "buttons": [
+                            {
+                                "action": "webLink",
+                                "label": label,
+                                "webLinkUrl": url
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+
 
 
 # ========================================
