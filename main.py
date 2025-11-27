@@ -93,21 +93,22 @@ def map_wtr(code:int):
 
 
 #============================================================
-# 검색 엔진 (파일 + 썸네일까지 찾음)
+# 검색 엔진 수정 (row 반환 방식 안정화)
 #============================================================
 def search(code):
     code=str(code).upper()
 
-    # ★ 문자코드 (ID2202 등)
+    # 문자 코드 비교
     result=df[df["code_str"]==code]
 
-    # ★ 숫자 입력 시 변환 → 역매핑 검색
-    if len(result)==0 and code.isdigit():
-        conv=map_wtr(int(code))
+    # 숫자 입력 → 변환 후 재검색
+    if result.empty and code.isdigit():
+        conv = map_wtr(int(code))
         if conv:
-            result=df[df["code_num"]==conv]
+            result = df[df["code_num"]==conv]
 
-    return None if len(result)==0 else result.iloc[0]
+    return None if result.empty else result.iloc[0]   # << row가 정확히 1행 반환됨
+
 
 
 #============================================================
@@ -153,20 +154,24 @@ def text_reply(msg):
 
 
 #============================================================
-# Kakao Skill
+# Kakao Skill 수정 (오류 해결)
 #============================================================
 @app.post("/kakao/skill")
 def kakao_skill(req:KakaoRequest):
 
     query=req.userRequest.get("utterance","").strip()
     m=re.match(r"/w\s+(.+)",query,re.IGNORECASE)
-    if not m: return text_reply("❗ 사용법: /w 865  /w ID2202")
+    if not m: 
+        return text_reply("❗ 사용법: /w 865 또는 /w ID2202")
 
     code=m.group(1)
     row=search(code)
-    if not row: return text_reply(f"❗ '{code}' 정보 없음")
 
-    attach=str(row["첨부"]).strip() if "첨부" in row else None
+    # 🔥 오류 해결 — Series 비교 금지 → None 판정만 사용
+    if row is None:
+        return text_reply(f"❗ '{code}' 정보 없음")
+
+    attach=str(row["첨부"]).strip() if "첨부" in row and not pd.isna(row["첨부"]) else None
     desc=f"{row['err_name']}\n\n{row['desc']}"
 
     return card_reply(f"WTR Error {row['code']}", desc, attach)
