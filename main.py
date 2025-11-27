@@ -115,34 +115,33 @@ def search(code):
 # 카카오 응답
 #============================================================
 def card_reply(title, desc, attach):
-    image=None
-    if attach:
-        jpg=BASE_URL+attach+".jpg"
-        png=BASE_URL+attach+".png"
-        image=jpg if requests.get(jpg).status_code==200 else \
-               (png if requests.get(png).status_code==200 else None)
+
+    # 첨부 없을 경우 → text로 대체
+    if attach is None or attach.strip() == "":
+        return text_reply(f"{title}\n\n{desc}\n\n📎 첨부파일 없음")
 
     return {
         "version":"2.0",
         "template":{
-            "outputs":[
-                {
-                    "basicCard":{
-                        "title":title,
-                        "description":desc,
-                        "thumbnail":{"imageUrl":image} if image else {},
-                        "buttons":[
-                            {
-                                "label":"파일 다운로드",
-                                "action":"webLink",
-                                "webLinkUrl":BASE_URL+attach
-                            }
-                        ]
-                    }
+            "outputs":[{
+                "basicCard":{
+                    "title":title,
+                    "description":desc,
+                    "thumbnail":{
+                        "imageUrl":BASE_URL+attach
+                    },
+                    "buttons":[
+                        {
+                            "label":"📄 다운로드",
+                            "action":"webLink",
+                            "webLinkUrl":BASE_URL+attach
+                        }
+                    ]
                 }
-            ]
+            }]
         }
     }
+
 
 def text_reply(msg):
     return {
