@@ -7,6 +7,10 @@ import time
 import requests
 import os
 
+GITHUB_USER = "ChangHyun-Lim"   # 예: robotdev
+REPO_NAME   = "kakao_error_bot"   # 예: wtr_error_bot
+
+
 app = FastAPI()
 
 # ----------------------------------------
