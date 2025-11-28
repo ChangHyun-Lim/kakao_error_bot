@@ -25,6 +25,8 @@ def load_excel_once():
     df = pd.read_excel(EXCEL_FILE)
     df["code_str"] = df["code"].astype(str).str.upper()
     df["code_num"] = pd.to_numeric(df["code"], errors="ignore")
+    df["attach"] = df["attach"].astype(str).str.strip()
+    df["attach"] = df["attach"].replace({"nan":""})   # NaN → 빈문자 처리
     print("[INFO] Excel Loaded OK")
 
 @app.on_event("startup")
@@ -170,7 +172,13 @@ def kakao_skill(req:KakaoRequest):
     if row is None:
         return text_reply(f"❗ '{code}' 정보 없음")
 
-    attach=str(row["첨부"]).strip() if "첨부" in row and not pd.isna(row["첨부"]) else None
-    desc=f"{row['err_name']}\n\n{row['desc']}"
+    attach = str(row.get("attach","")).strip()
 
-    return card_reply(f"WTR Error {row['code']}", desc, attach)
+    # 첨부파일 있는지 확인
+    if attach and attach.lower() != "nan":
+        file_url = f"{BASE_URL}{attach}"   # BASE_URL = RAW URL + /files/
+        return card_reply(f"WTR Error {row['code']}", desc, attach)
+    else:
+        return text_reply(
+            f"[WTR Error {row['code']}]\n{row['err_name']}\n\n{desc}\n\n📎 첨부파일 없음"
+        )
