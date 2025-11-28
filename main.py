@@ -8,8 +8,8 @@ app = FastAPI()
 #============================================================
 #  Github raw file URL 정보 입력해야 동작!!!!! <<<<<<<<<<<<<
 #============================================================
-GITHUB_USER = "GitHubUserName"
-REPO_NAME   = "RepositoryName"
+GITHUB_USER = "ChangHyun-Lim"
+REPO_NAME   = "kakao_error_bot"
 
 BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/files/"
 
@@ -158,27 +158,27 @@ def text_reply(msg):
 # Kakao Skill 수정 (오류 해결)
 #============================================================
 @app.post("/kakao/skill")
-def kakao_skill(req:KakaoRequest):
+def kakao_skill(request: KakaoRequest):
 
-    query=req.userRequest.get("utterance","").strip()
-    m=re.match(r"/w\s+(.+)",query,re.IGNORECASE)
-    if not m: 
-        return text_reply("❗ 사용법: /w 865 또는 /w ID2202")
+    utter = request.userRequest.get("utterance","").strip()
+    m = re.match(r"/([wal])\s+(.+)", utter, re.IGNORECASE)
+    if not m:
+        return text_reply("❗ 명령어 형식 오류\n예) /w 865  /a E02  /l 10")
 
-    code=m.group(1)
-    row=search(code)
+    prefix = m.group(1).lower()
+    code    = m.group(2).strip()
 
-    # 🔥 오류 해결 — Series 비교 금지 → None 판정만 사용
-    if row is None:
-        return text_reply(f"❗ '{code}' 정보 없음")
+    row, err = search_error(prefix, code)
+    if err:
+        return text_reply(err)
 
+    desc = row["desc"]                       # 🔥 추가
     attach = str(row.get("attach","")).strip()
 
-    # 첨부파일 있는지 확인
-    if attach and attach.lower() != "nan":
-        file_url = f"{BASE_URL}{attach}"   # BASE_URL = RAW URL + /files/
-        return card_reply(f"WTR Error {row['code']}", desc, attach)
+    if attach and attach.lower()!="nan":     # 첨부파일 존재하면
+        return card_reply(f"{prefix.upper()} ERROR {row['code']}", desc, attach)
     else:
         return text_reply(
-            f"[WTR Error {row['code']}]\n{row['err_name']}\n\n{desc}\n\n📎 첨부파일 없음"
+        return text_reply(
+            f"[{prefix.upper()} ERROR {row['code']}]\n{row['err_name']}\n\n{desc}\n📎 첨부 없음"
         )
