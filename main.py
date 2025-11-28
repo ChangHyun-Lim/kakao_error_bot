@@ -168,17 +168,19 @@ def kakao_skill(request: KakaoRequest):
     prefix = m.group(1).lower()
     code    = m.group(2).strip()
 
-    row, err = search_error(prefix, code)
-    if err:
-        return text_reply(err)
+    # 🔥 search_error -> search 로 변경
+    row = search(code)
 
-    desc = row["desc"]                       # 🔥 추가
-    attach = str(row.get("attach","")).strip()
+    if row is None:
+        return text_reply(f"❗ '{code}' 관련 정보가 없습니다.")
 
-    if attach and attach.lower()!="nan":     # 첨부파일 존재하면
+    desc = row["desc"]
+    attach = row.get("attach","").strip()
+
+    if attach:
         return card_reply(f"{prefix.upper()} ERROR {row['code']}", desc, attach)
-    else:
-        return text_reply(
-        return text_reply(
-            f"[{prefix.upper()} ERROR {row['code']}]\n{row['err_name']}\n\n{desc}\n📎 첨부 없음"
-        )
+
+    return text_reply(
+        f"[{prefix.upper()} ERROR {row['code']}]\n{row['err_name']}\n\n{desc}\n📎 첨부 없음"
+    )
+
