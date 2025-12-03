@@ -239,13 +239,15 @@ def kakao_skill(request: KakaoRequest):
 
     if row is None:
         return text_reply(f"❗ '{code}' 관련 정보가 없습니다.")
-
-    desc = row["desc"]
-    attach = row.get("attach", "").strip()
     
-    title = f"{prefix.upper()} ERROR {row['code']}"
+    desc = safe_str(row.get("desc", ""))
+    attach = safe_str(row.get("attach", "")).strip()
+    code_str = safe_str(row.get("code", ""))        # 숫자라도 문자열로
+    err_name = safe_str(row.get("err_name", ""))
+    
+    title = f"{prefix.upper()} ERROR {code_str}"
     
     if attach:
         return card_reply(title, desc, attach)
     
-    return text_reply(f"[{title}]\n{row['err_name']}\n\n{desc}\n📎 첨부 없음")
+    return text_reply(f"[{title}]\n{err_name}\n\n{desc}\n📎 첨부 없음")
