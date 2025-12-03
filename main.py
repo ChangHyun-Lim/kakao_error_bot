@@ -2,6 +2,25 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import pandas as pd
 import re, os, threading, time, requests
+import math
+import pandas as pd  # 이미 위에 있으니까 중복 import는 생략 가능
+
+def safe_str(value):
+    """
+    NaN / None 을 항상 안전한 문자열로 변환
+    """
+    if value is None:
+        return ""
+    # pandas / numpy NaN 처리
+    try:
+        if pd.isna(value):
+            return ""
+    except TypeError:
+        pass
+    # float NaN 직접 체크
+    if isinstance(value, float) and math.isnan(value):
+        return ""
+    return str(value)
 
 app = FastAPI()
 
@@ -150,17 +169,27 @@ def search(prefix: str, code: str):
 # 응답 생성
 #============================================================
 def card_reply(title, desc, attach):
+    # NaN / None 방지
+    title = safe_str(title)
+    desc = safe_str(desc)
+    attach = safe_str(attach).strip()
+
     if not attach:
         return text_reply(f"{title}\n\n{desc}\n\n📎 첨부파일 없음")
 
-    files = [x.strip() for x in attach.split(",")]
+    # "a.png, b.pdf" 처럼 쉼표로 구분된 여러 파일 처리
+    files = [x.strip() for x in attach.split(",") if x.strip()]
 
+    if not files:
+        return text_reply(f"{title}\n\n{desc}\n\n📎 첨부파일 없음")
+
+    # Kakao basicCard 버튼: 최대 3개
     buttons = []
-    for f in files:
+    for fname in files[:3]:
         buttons.append({
-            "label": f"📄 {f}",
+            "label": f"📄 {fname}",
             "action": "webLink",
-            "webLinkUrl": BASE_URL + f
+            "webLinkUrl": BASE_URL + fname
         })
 
     return {
@@ -171,13 +200,15 @@ def card_reply(title, desc, attach):
                     "title": title,
                     "description": desc,
                     "thumbnail": {
-                        "imageUrl": BASE_URL + files[0]  # 첫 번째 파일로 대표 이미지
+                        # 첫 번째 파일을 썸네일로 사용
+                        "imageUrl": BASE_URL + files[0]
                     },
-                    "buttons": buttons[:3]  # 카카오 정책: 최대 3개
+                    "buttons": buttons
                 }
             }]
         }
     }
+
 
 
 def text_reply(msg):
@@ -211,10 +242,10 @@ def kakao_skill(request: KakaoRequest):
 
     desc = row["desc"]
     attach = row.get("attach", "").strip()
-
+    
     title = f"{prefix.upper()} ERROR {row['code']}"
-
+    
     if attach:
         return card_reply(title, desc, attach)
-
+    
     return text_reply(f"[{title}]\n{row['err_name']}\n\n{desc}\n📎 첨부 없음")
