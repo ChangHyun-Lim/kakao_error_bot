@@ -150,8 +150,18 @@ def search(prefix: str, code: str):
 # 응답 생성
 #============================================================
 def card_reply(title, desc, attach):
-    if attach is None or attach.strip() == "":
+    if not attach:
         return text_reply(f"{title}\n\n{desc}\n\n📎 첨부파일 없음")
+
+    files = [x.strip() for x in attach.split(",")]
+
+    buttons = []
+    for f in files:
+        buttons.append({
+            "label": f"📄 {f}",
+            "action": "webLink",
+            "webLinkUrl": BASE_URL + f
+        })
 
     return {
         "version": "2.0",
@@ -161,15 +171,9 @@ def card_reply(title, desc, attach):
                     "title": title,
                     "description": desc,
                     "thumbnail": {
-                        "imageUrl": BASE_URL + attach
+                        "imageUrl": BASE_URL + files[0]  # 첫 번째 파일로 대표 이미지
                     },
-                    "buttons": [
-                        {
-                            "label": "📄 다운로드",
-                            "action": "webLink",
-                            "webLinkUrl": BASE_URL + attach
-                        }
-                    ]
+                    "buttons": buttons[:3]  # 카카오 정책: 최대 3개
                 }
             }]
         }
