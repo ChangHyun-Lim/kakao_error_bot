@@ -36,7 +36,7 @@ BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/fi
 EXCEL_FILES = {
     "w": "wtr_Error_Code.xlsx",
     "a": "aligner_Error_Code.xlsx",
-    "l": "loadport_Error_Code.xlsx"
+    "l": "loadport_Error_Code.xlsx",
     "v": "vp_Error_Code.xlsx"
 }
 
