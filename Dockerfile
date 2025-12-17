@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY wtr_Error_Code.xlsx .
 COPY aligner_Error_Code.xlsx .
 COPY loadport_Error_Code.xlsx .
+COPY vp_Error_Code.xlsx .
 COPY main.py .
 
 # Cloud Run / 일반 Docker 둘 다 대응 (PORT 미지정 시 8080)
