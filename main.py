@@ -3,7 +3,6 @@ from pydantic import BaseModel
 import pandas as pd
 import re, os, threading, time, requests
 import math
-import pandas as pd  # 이미 위에 있으니까 중복 import는 생략 가능
 
 def safe_str(value):
     """
@@ -38,6 +37,7 @@ EXCEL_FILES = {
     "w": "wtr_Error_Code.xlsx",
     "a": "aligner_Error_Code.xlsx",
     "l": "loadport_Error_Code.xlsx"
+    "v": "vp_Error_Code.xlsx"
 }
 
 df_map = {}   # w/a/l → dataframe 저장
@@ -102,70 +102,43 @@ class KakaoRequest(BaseModel):
 # WTR 전용 코드 역변환
 #============================================================
 def map_wtr(code: int):
-    c = int(code)
+    if 300 <= code <= 400:
+        return code + 700
 
-    # ① 1000~1100 → 300~400
-    #    out = original - 700  → original = c + 700
-    if 300 <= c <= 400:
-        return c + 700
+    if 400 <= code <= 500:
+        return code + 1600
 
-    # ② 2000~2100 → 401~499
-    #    out = original - 1600 → original = c + 1600
-    if 401 <= c <= 499:
-        return c + 1600
+    if 300 <= code <= 330:
+        return -(code - 300)
 
-    # ③ -230 ~ -200 → 500~529
-    #    out = (-o) + 300 → -o = c - 300 → o = -(c - 300)
-    if 500 <= c <= 529:
-        return -(c - 300)
+    if 230 <= code <= 260:
+        return -(code - 230)
 
-    # ④ -330 ~ -300 → 530~559
-    #    out = (-o) + 230 → o = -(c - 230)
-    if 530 <= c <= 559:
-        return -(c - 230)
+    if 60 <= code <= 100:
+        return -(code - 60)
 
-    # ⑤ -530 ~ -500 → 560~589
-    #    out = (-o) + 60 → o = -(c - 60)
-    if 560 <= c <= 589:
-        return -(c - 60)
+    if -110 <= code <= 120:
+        return -(code + 110)
 
-    # ⑥ -820 ~ -700 → 590~709
-    #    out = (-o) - 110 → -o = c + 110 → o = -(c + 110)
-    if 590 <= c <= 709:
-        return -(c + 110)
+    if 710 <= code <= 760:
+        return -(code + 290)
 
-    # ⑦ -1060 ~ -1000 → 710~769
-    #    out = (-o) - 290 → o = -(c + 290)
-    if 710 <= c <= 769:
-        return -(c + 290)
+    if 770 <= code <= 840:
+        return -(code + 730)
 
-    # ⑧ -1570 ~ -1500 → 770~839
-    #    out = (-o) - 730 → o = -(c + 730)
-    if 770 <= c <= 839:
-        return -(c + 730)
+    if 840 <= code <= 860:
+        return -(code + 760)
 
-    # ⑨ -1620 ~ -1600 → 840~859
-    #    out = (-o) - 760 → o = -(c + 760)
-    if 840 <= c <= 859:
-        return -(c + 760)
+    if 860 <= code <= 910:
+        return -(code + 840)
 
-    # ⑩ -1750 ~ -1700 → 860~909
-    #    out = (-o) - 840 → o = -(c + 840)
-    if 860 <= c <= 909:
-        return -(c + 840)
+    if 910 <= code <= 930:
+        return -(code + 2090)
 
-    # ⑪ -3020 ~ -3000 → 910~929
-    #    out = (-o) - 2090 → o = -(c + 2090)
-    if 910 <= c <= 929:
-        return -(c + 2090)
+    if 930 <= code <= 980:
+        return -(code + 2170)
 
-    # ⑫ -3150 ~ -3100 → 930~979
-    #    out = (-o) - 2170 → o = -(c + 2170)
-    if 930 <= c <= 979:
-        return -(c + 2170)
-
-    # 나머지는 "변환 안 된 것" 이라고 보고 원본 = 표시코드
-    return c
+    return None
 
 
 #============================================================
@@ -181,7 +154,8 @@ def search(prefix: str, code: str):
     # 숫자 입력이면 역변환 적용 (WTR 전용)
     if result.empty and code.isdigit():
         num = int(code)
-        if prefix == "w":       # 숫자 역변환은 WTR만 적용
+        if prefix == "w" \
+            or prefix == "v" :       # 숫자 역변환은 WTR만 적용
             conv = map_wtr(num)
             if conv is not None:
                 result = df[df["code_num"] == conv]
@@ -255,9 +229,9 @@ def kakao_skill(request: KakaoRequest):
 
     utter = request.userRequest.get("utterance", "").strip()
 
-    m = re.match(r"/([wal])\s+(.+)", utter, re.IGNORECASE)
+    m = re.match(r"/([walv])\s+(.+)", utter, re.IGNORECASE)
     if not m:
-        return text_reply("❗ 명령어 형식 오류\n예) /w 865  /a 001  /l 10")
+        return text_reply("❗ 명령어 형식 오류\n예) /w 865  /a 001  /l 10 /v 405"")
 
     prefix = m.group(1).lower()
     code    = m.group(2).strip()
