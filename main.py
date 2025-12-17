@@ -231,7 +231,7 @@ def kakao_skill(request: KakaoRequest):
 
     m = re.match(r"/([walv])\s+(.+)", utter, re.IGNORECASE)
     if not m:
-        return text_reply("❗ 명령어 형식 오류\n예) /w 865  /a 001  /l 10 /v 405"")
+        return text_reply("❗ 명령어 형식 오류\n예) /w 865  /a 001  /l 10 /v 405")
 
     prefix = m.group(1).lower()
     code    = m.group(2).strip()
