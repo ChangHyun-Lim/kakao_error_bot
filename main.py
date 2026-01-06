@@ -123,16 +123,16 @@ def map_wtr(code: int):
     if 710 <= code <= 760:
         return -(code + 290)
 
-    if 770 <= code <= 840:
+    if 770 <= code < 840:
         return -(code + 730)
 
-    if 840 <= code <= 860:
+    if 840 <= code < 860:
         return -(code + 760)
 
-    if 860 <= code <= 910:
+    if 860 <= code < 910:
         return -(code + 840)
 
-    if 910 <= code <= 930:
+    if 910 <= code < 930:
         return -(code + 2090)
 
     if 930 <= code <= 980:
