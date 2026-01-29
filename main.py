@@ -117,7 +117,7 @@ def map_wtr(code: int):
     if 60 <= code <= 100:
         return -(code - 60)
 
-    if -110 <= code <= 120:
+    if 590 <= code <= 709:
         return -(code + 110)
 
     if 710 <= code <= 760:
