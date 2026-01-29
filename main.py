@@ -48,12 +48,13 @@ def load_excel_once():
     for key, file in EXCEL_FILES.items():
         df = pd.read_excel(file)
         df["code_str"] = df["code"].astype(str).str.upper()
-        # Try 'ignore' first (preserve non-numeric entries if supported by pandas).
-        # Some pandas builds raise ValueError for errors='ignore', so fall back to 'coerce'.
-        try:
-            df["code_num"] = pd.to_numeric(df["code"], errors="ignore")
-        except ValueError:
-            df["code_num"] = pd.to_numeric(df["code"], errors="coerce")
+
+        # 안전하게 숫자 변환: errors='coerce' 로 비숫자를 NaN 으로 처리
+        df["code_num"] = pd.to_numeric(df["code"], errors="coerce")
+
+        # 필요시 정수형 nullable로 변환하려면 아래처럼 사용 가능
+        # df["code_num"] = pd.to_numeric(df["code"], errors="coerce").astype("Int64")
+
         df["attach"] = df["attach"].astype(str).str.strip()
         df["attach"] = df["attach"].replace({"nan": ""})
         df_map[key] = df
